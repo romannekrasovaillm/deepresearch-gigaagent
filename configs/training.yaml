@@ -1,0 +1,216 @@
+# Deep Research Agent Training Configuration
+# For 4×H200 with FSDP
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  name: GigaChat-Lightning-Instruct  # или путь к локальной модели
+  path: null  # Если null, загрузится по имени
+  precision: bf16
+  flash_attention: true
+  gradient_checkpointing: true
+
+# =============================================================================
+# Distributed Training (FSDP for 4×H200)
+# =============================================================================
+distributed:
+  strategy: fsdp  # fsdp, ddp, deepspeed
+  world_size: 4
+  sharding_strategy: FULL_SHARD
+  cpu_offload: false  # H200 имеет достаточно VRAM
+
+# =============================================================================
+# SFT (Supervised Fine-Tuning)
+# =============================================================================
+sft:
+  enabled: true
+  dataset_path: ./data/synthetic/sft_train.jsonl
+
+  # Hyperparameters
+  epochs: 3
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_length: 4096
+
+  # Optimization
+  optimizer: adamw
+  lr_scheduler: linear
+  max_grad_norm: 1.0
+
+# =============================================================================
+# RL (Reinforcement Learning with PPO/GRPO)
+# =============================================================================
+rl:
+  enabled: true
+  dataset_path: ./data/synthetic/rl_prompts.jsonl
+  sft_checkpoint: ./outputs/checkpoints/sft-final
+
+  # PPO Hyperparameters
+  algorithm: ppo  # ppo, grpo
+  epochs: 1
+  batch_size: 64
+  rollout_batch_size: 32
+  learning_rate: 1.0e-6
+
+  # PPO specific
+  kl_coef: 0.05
+  clip_range: 0.2
+  value_clip: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  normalize_advantages: true
+
+  # Rollout generation
+  num_rollouts_per_prompt: 1
+  max_response_length: 2048
+
+# =============================================================================
+# Environment Configuration
+# =============================================================================
+environment:
+  type: ToolEnv
+  max_turns: 15
+  timeout_per_tool: 30
+
+  # Paths
+  library_path: /mnt/library
+  workspace_path: /workspace
+
+  # Tools
+  tools:
+    - grep_search
+    - read_file_chunk
+    - find_files
+    - verify_quote
+    - list_papers
+    - get_paper_metadata
+    - get_paper_abstract
+    - get_paper_section
+    - execute_python
+    - add_to_notes
+    - read_notes
+    - save_figure
+
+# =============================================================================
+# Reward Configuration (MOA-style)
+# =============================================================================
+reward:
+  # Reward weights
+  weights:
+    fact: 0.4        # Factual accuracy
+    process: 0.2     # Process efficiency
+    citation: 0.2    # Citation accuracy
+    code: 0.2        # Code quality
+
+  # LLM Judge for R_fact
+  judge:
+    model: gpt-4o-mini  # gpt-4o, deepseek-chat, claude-3-5-sonnet
+    temperature: 0.1
+    max_retries: 3
+
+  # Process penalties
+  process:
+    max_turns_before_penalty: 10
+    penalty_per_extra_turn: 0.05
+    repeat_action_penalty: 0.1
+    failed_tool_penalty: 0.1
+
+  # Code execution
+  code:
+    reward_successful: 0.3
+    penalty_failed: 0.1
+
+# =============================================================================
+# Curriculum Learning
+# =============================================================================
+curriculum:
+  enabled: true
+  levels:
+    - name: retrieval
+      epochs: 1
+      task_filter: ["retrieval"]
+      description: "Simple fact finding"
+
+    - name: extraction
+      epochs: 1
+      task_filter: ["retrieval"]
+      difficulty_filter: ["medium", "hard"]
+      description: "Complex extraction"
+
+    - name: computation
+      epochs: 1
+      task_filter: ["computation"]
+      description: "Code-based analysis"
+
+    - name: multihop
+      epochs: 1
+      task_filter: ["multihop"]
+      description: "Multi-paper reasoning"
+
+    - name: synthesis
+      epochs: 1
+      task_filter: ["synthesis"]
+      description: "Full research synthesis"
+
+# =============================================================================
+# Logging & Checkpoints
+# =============================================================================
+output:
+  dir: ./outputs
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 100
+
+  # Checkpointing
+  save_total_limit: 3
+  save_on_each_node: false
+
+  # Weights & Biases
+  wandb:
+    enabled: true
+    project: deepresearch-agent
+    entity: null  # Your W&B username/team
+    run_name: null  # Auto-generated if null
+
+  # TensorBoard
+  tensorboard:
+    enabled: true
+    log_dir: ./outputs/tensorboard
+
+# =============================================================================
+# Hardware Optimization (H200 specific)
+# =============================================================================
+hardware:
+  # Memory optimization
+  bf16: true
+  tf32: true
+
+  # Flash Attention 3 (Hopper architecture)
+  flash_attention: true
+  flash_attention_version: 2  # or 3 for H200
+
+  # Compilation
+  torch_compile: false  # Can speed up but may have issues
+
+  # DataLoader
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+
+# =============================================================================
+# Evaluation
+# =============================================================================
+evaluation:
+  enabled: true
+  eval_dataset_path: ./data/synthetic/eval.jsonl
+  num_samples: 100
+
+  metrics:
+    - accuracy  # Judge score
+    - efficiency  # Average turns
+    - citation_accuracy
+    - code_success_rate

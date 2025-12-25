@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepresearch-gigaagent"
+version = "0.1.0"
+description = "Deep Research Agent with Code Reasoning for Scientific Synthesis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Deep Research Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Core ML
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "accelerate>=0.25.0",
+    "bitsandbytes>=0.41.0",
+
+    # Document processing
+    "python-docx>=1.1.0",
+    "mammoth>=1.6.0",
+    "pypandoc>=1.12",
+
+    # Data processing
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+
+    # Visualization
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+
+    # API clients
+    "openai>=1.6.0",
+    "anthropic>=0.8.0",
+
+    # RL & Training
+    "datasets>=2.16.0",
+    "wandb>=0.16.0",
+    "tensorboard>=2.15.0",
+
+    # Utilities
+    "pydantic>=2.5.0",
+    "rich>=13.7.0",
+    "typer>=0.9.0",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1.0",
+    "tqdm>=4.66.0",
+
+    # Sandbox execution
+    "RestrictedPython>=7.0",
+    "docker>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=23.12.0",
+    "ruff>=0.1.9",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+dr-convert = "src.library.convert:main"
+dr-generate = "src.generation.synthetic:main"
+dr-train = "src.training.train:main"
+dr-agent = "src.tools.agent:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
