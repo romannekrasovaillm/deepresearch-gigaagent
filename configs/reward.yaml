@@ -1,0 +1,119 @@
+# Reward Configuration (MOA-style Multi-Objective)
+
+# =============================================================================
+# REWARD WEIGHTS
+# =============================================================================
+weights:
+  R_fact: 0.40       # Factual accuracy (LLM-Judge)
+  R_process: 0.20    # Search efficiency
+  R_citation: 0.20   # Citation accuracy
+  R_code: 0.20       # Code reasoning quality
+
+# =============================================================================
+# R_FACT: Factual Accuracy (LLM-as-Judge)
+# =============================================================================
+fact_reward:
+  judge_model: "deepseek-v3"  # or "gpt-4o", "claude-3-opus"
+  judge_api_base: null  # Use default or set custom endpoint
+
+  rubric:
+    - criteria: "accuracy"
+      description: "The answer contains factually correct information from the papers"
+      weight: 0.4
+    - criteria: "completeness"
+      description: "The answer addresses all aspects of the question"
+      weight: 0.3
+    - criteria: "relevance"
+      description: "The answer is directly relevant to the question"
+      weight: 0.3
+
+  # Scoring scale
+  scale:
+    min: 0.0
+    max: 1.0
+
+  # Prompt template for judge
+  prompt_template: |
+    You are evaluating a research agent's answer.
+
+    Question: {question}
+    Golden Answer: {golden_answer}
+    Agent's Answer: {agent_answer}
+
+    Evaluate on three criteria:
+    1. Accuracy (0-1): Is the information factually correct?
+    2. Completeness (0-1): Does it address all aspects?
+    3. Relevance (0-1): Is it directly relevant?
+
+    Return JSON: {"accuracy": X, "completeness": Y, "relevance": Z}
+
+# =============================================================================
+# R_PROCESS: Search Efficiency
+# =============================================================================
+process_reward:
+  # Penalties
+  penalty_per_step: 0.02        # Small penalty for each action
+  penalty_repeated_search: 0.1  # Penalty for repeating same search
+  penalty_irrelevant_file: 0.05 # Penalty for reading irrelevant files
+
+  # Bonuses
+  bonus_direct_hit: 0.1         # Bonus for finding answer quickly
+  bonus_efficient_path: 0.15    # Bonus for minimal steps to answer
+
+  # Thresholds
+  max_steps_before_penalty: 10  # No step penalty below this
+  optimal_steps_threshold: 5    # Steps for "direct hit" bonus
+
+# =============================================================================
+# R_CITATION: Citation Accuracy
+# =============================================================================
+citation_reward:
+  # Verification method
+  verify_method: "programmatic"  # Check if file was actually opened
+
+  # Scoring
+  correct_citation: 0.2          # Per correct citation
+  incorrect_citation: -0.3       # Per hallucinated citation
+  missing_citation: -0.1         # Per missing required citation
+
+  # Quote verification
+  verify_quotes: true
+  quote_match_threshold: 0.85    # Fuzzy match threshold
+
+# =============================================================================
+# R_CODE: Code Reasoning Quality
+# =============================================================================
+code_reward:
+  # Execution success
+  execution_success: 0.2         # Code ran without errors
+  execution_failure: -0.1        # Code crashed
+
+  # Relevance (LLM-judge)
+  relevance_weight: 0.3
+  relevance_prompt: |
+    Was this code execution relevant and useful for answering the question?
+    Question: {question}
+    Code: {code}
+    Output: {output}
+    Return: {"relevant": true/false, "score": 0-1}
+
+  # Result usage
+  result_used_in_answer: 0.2     # Code result incorporated in final answer
+  result_ignored: -0.05          # Code ran but result not used
+
+  # Quality bonuses
+  bonus_visualization: 0.1       # Created useful visualization
+  bonus_statistical_test: 0.15   # Performed appropriate statistical test
+
+# =============================================================================
+# COMBINED REWARD CALCULATION
+# =============================================================================
+combination:
+  method: "weighted_sum"  # or "multiplicative", "min"
+  normalize: true
+  clip_range: [-1.0, 1.0]
+
+  # Outcome-based adjustments
+  success_bonus: 0.2      # Bonus for fully correct answer
+  failure_penalty: -0.3   # Penalty for completely wrong answer
+  timeout_penalty: -0.5   # Penalty for exceeding max_turns

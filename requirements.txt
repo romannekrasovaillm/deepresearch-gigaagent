@@ -1,0 +1,46 @@
+# Deep Research Agent Training Requirements
+
+# Core ML/RL
+torch>=2.1.0
+transformers>=4.40.0
+accelerate>=0.27.0
+peft>=0.10.0
+bitsandbytes>=0.43.0
+flash-attn>=2.5.0
+
+# RL Training (PrimeIntellect)
+# Install from source:
+# pip install -e git+https://github.com/PrimeIntellect-ai/prime-rl.git
+# pip install -e git+https://github.com/PrimeIntellect-ai/verifiers.git
+
+# Document Processing
+python-docx>=1.1.0
+pypandoc>=1.13
+markdown>=3.5.0
+
+# Code Interpreter (Sandbox)
+RestrictedPython>=7.0
+docker>=7.0.0
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0
+matplotlib>=3.8.0
+sympy>=1.12
+
+# LLM APIs (for synthetic data generation)
+openai>=1.12.0
+anthropic>=0.18.0
+
+# Utilities
+pyyaml>=6.0.1
+jsonlines>=4.0.0
+tqdm>=4.66.0
+rich>=13.7.0
+typer>=0.9.0
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

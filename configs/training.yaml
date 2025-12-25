@@ -1,0 +1,152 @@
+# Deep Research Agent Training Configuration
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+model:
+  name: "GigaChat-Lightning-Instruct"
+  # path: "/path/to/local/model"  # Uncomment for local model
+  precision: bf16
+  use_flash_attention: true
+  max_length: 8192
+
+# =============================================================================
+# DISTRIBUTED TRAINING (4x H200)
+# =============================================================================
+distributed:
+  strategy: fsdp  # Full Sharded Data Parallel
+  num_gpus: 4
+  gradient_checkpointing: true
+  mixed_precision: bf16
+
+fsdp:
+  sharding_strategy: "FULL_SHARD"
+  cpu_offload: false
+  backward_prefetch: "BACKWARD_PRE"
+  forward_prefetch: true
+  use_orig_params: true
+
+# =============================================================================
+# SFT TRAINING
+# =============================================================================
+sft:
+  output_dir: "./checkpoints/sft"
+  num_epochs: 3
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-5
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  save_steps: 500
+  eval_steps: 250
+  logging_steps: 10
+
+# =============================================================================
+# RL TRAINING (PPO/GRPO)
+# =============================================================================
+rl:
+  algorithm: "grpo"  # or "ppo"
+  output_dir: "./checkpoints/rl"
+
+  # Rollout settings
+  num_rollouts: 64
+  max_turns: 15
+  temperature: 0.7
+  top_p: 0.95
+
+  # PPO hyperparameters
+  ppo:
+    num_epochs: 4
+    batch_size: 16
+    mini_batch_size: 4
+    learning_rate: 1.0e-6
+    kl_coef: 0.02
+    clip_range: 0.2
+    value_loss_coef: 0.5
+    entropy_coef: 0.01
+    gamma: 0.99
+    gae_lambda: 0.95
+
+  # GRPO hyperparameters
+  grpo:
+    num_generations: 8
+    learning_rate: 5.0e-7
+    beta: 0.1
+
+  # Training schedule
+  total_steps: 10000
+  save_steps: 500
+  eval_steps: 250
+  logging_steps: 10
+
+# =============================================================================
+# CURRICULUM LEARNING
+# =============================================================================
+curriculum:
+  enabled: true
+  stages:
+    - name: "retrieval"
+      steps: 2000
+      task_distribution:
+        retrieval: 0.7
+        extraction: 0.3
+    - name: "reasoning"
+      steps: 3000
+      task_distribution:
+        retrieval: 0.2
+        extraction: 0.3
+        computation: 0.3
+        multihop: 0.2
+    - name: "synthesis"
+      steps: 5000
+      task_distribution:
+        retrieval: 0.1
+        extraction: 0.1
+        computation: 0.2
+        multihop: 0.2
+        visualization: 0.1
+        synthesis: 0.3
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION
+# =============================================================================
+environment:
+  type: "ToolEnv"
+  max_turns: 15
+  timeout_per_action: 30  # seconds
+
+  tools:
+    - grep_search
+    - read_file_chunk
+    - find_files
+    - list_papers
+    - execute_python
+    - add_to_notes
+    - read_notes
+    - verify_quote
+    - save_figure
+
+  library_path: "./data/library"
+  workspace_path: "./data/workspace"
+
+  sandbox:
+    type: "docker"  # or "restricted_python"
+    image: "python:3.11-slim"
+    timeout: 30
+    memory_limit: "512m"
+    allowed_libraries:
+      - pandas
+      - numpy
+      - scipy
+      - matplotlib
+      - sympy
+
+# =============================================================================
+# LOGGING & MONITORING
+# =============================================================================
+logging:
+  project: "deepresearch-agent"
+  run_name: null  # Auto-generated if null
+  use_wandb: true
+  log_level: "INFO"
