@@ -1,0 +1,181 @@
+# Deep Research Agent - Base Configuration
+# This is the main configuration file for the training pipeline
+
+# Model Configuration
+model:
+  name: "ai-sage/GigaChat-Lightning-Instruct"
+  # Alternative: "deepseek-ai/DeepSeek-V3" or your custom model
+  precision: "bf16"
+  trust_remote_code: true
+
+# Paths
+paths:
+  # Input: Directory with DOCX papers
+  docx_input: "./data/docx_input"
+
+  # Library: Converted papers in structured format
+  library: "/mnt/library"
+
+  # Datasets: Generated training data
+  datasets: "./data/datasets"
+
+  # Checkpoints: Model checkpoints
+  checkpoints: "./checkpoints"
+
+  # Workspace: Agent's working directory
+  workspace: "/workspace"
+
+# Library Conversion
+library:
+  # File pattern for input documents
+  pattern: "*.docx"
+
+  # Maximum parallel workers for conversion
+  workers: 4
+
+  # Topics for organizing papers
+  topics:
+    - "rl"           # Reinforcement Learning
+    - "alignment"    # AI Alignment
+    - "scaling"      # Scaling Laws
+    - "reasoning"    # Chain-of-Thought, Code Reasoning
+    - "agents"       # Tool Use, Agents
+    - "other"        # Uncategorized
+
+# Synthetic Data Generation
+synthetic:
+  # LLM for generating training data
+  provider: "openai"  # openai, anthropic, deepseek
+  model: "gpt-4-turbo-preview"
+
+  # Total samples to generate
+  total_samples: 10000
+
+  # Distribution of task types
+  distribution:
+    retrieval: 0.30      # Simple fact lookup
+    multihop: 0.25       # Multi-paper reasoning
+    computation: 0.20    # Requires Python/code
+    synthesis: 0.15      # Literature review
+    sft_demo: 0.10       # Tool usage demonstrations
+
+# SFT Training Configuration
+sft:
+  # Number of training epochs
+  epochs: 3
+
+  # Batch size per device
+  batch_size: 4
+
+  # Gradient accumulation steps
+  gradient_accumulation: 8
+
+  # Effective batch size = batch_size * gradient_accumulation * num_gpus
+  # = 4 * 8 * 4 = 128
+
+  # Learning rate
+  learning_rate: 2.0e-5
+
+  # Warmup ratio
+  warmup_ratio: 0.1
+
+  # Maximum sequence length
+  max_length: 4096
+
+  # Use gradient checkpointing to save memory
+  gradient_checkpointing: true
+
+# RL Training Configuration
+rl:
+  # RL Algorithm
+  algorithm: "ppo"  # ppo, grpo
+
+  # Number of training epochs
+  epochs: 10
+
+  # Rollout batch size
+  batch_size: 64
+
+  # Number of parallel environments
+  num_envs: 32
+
+  # Maximum turns per episode
+  max_turns: 15
+
+  # Learning rate (lower than SFT)
+  learning_rate: 1.0e-6
+
+  # PPO hyperparameters
+  ppo:
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_ratio: 0.2
+    value_loss_coef: 0.5
+    entropy_coef: 0.01
+    max_grad_norm: 1.0
+    kl_coef: 0.1
+
+# Reward Configuration
+rewards:
+  # Multi-objective reward weights
+  weights:
+    r_fact: 0.4      # Factual accuracy (LLM-Judge)
+    r_process: 0.2   # Search efficiency
+    r_citation: 0.2  # Citation accuracy
+    r_code: 0.2      # Code reasoning quality
+
+  # Judge model for R_fact
+  judge_model: "gpt-4"
+  judge_provider: "openai"
+
+# Environment Configuration
+environment:
+  # Maximum turns before forced termination
+  max_turns: 15
+
+  # Tools available to agent
+  tools:
+    - "grep_search"
+    - "read_file_chunk"
+    - "find_files"
+    - "verify_quote"
+    - "list_papers"
+    - "read_abstract"
+    - "get_paper_metadata"
+    - "execute_python"
+    - "add_to_notes"
+    - "read_notes"
+    - "save_data"
+    - "load_data"
+    - "save_figure"
+
+# Hardware Configuration
+hardware:
+  # Number of GPUs (4×H200)
+  num_gpus: 4
+
+  # Use FSDP for distributed training
+  fsdp: true
+
+  # Use BF16 precision
+  bf16: true
+
+  # Use Flash Attention (H200 supports FA3)
+  flash_attention: true
+
+# Logging
+logging:
+  # Log every N steps
+  log_interval: 10
+
+  # Save checkpoint every N steps
+  save_interval: 500
+
+  # Evaluate every N steps
+  eval_interval: 100
+
+  # Use Weights & Biases
+  wandb:
+    enabled: true
+    project: "deepresearch-gigaagent"
+    entity: null  # Your W&B username/team

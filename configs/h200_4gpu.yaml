@@ -1,0 +1,62 @@
+# Configuration optimized for 4×H200 (141GB each)
+# Full RL training without LoRA
+
+# Inherit from base
+_base_: "base.yaml"
+
+# Hardware-specific optimizations
+hardware:
+  num_gpus: 4
+  fsdp: true
+  bf16: true
+  flash_attention: true
+
+  # Memory analysis for GigaChat Lightning (10B params, ~1.8B active):
+  # - Model weights (10B, BF16): ~20 GB
+  # - Optimizer states (AdamW): ~40-60 GB
+  # - Gradients: ~20 GB
+  # - Total: ~80-100 GB
+  # - With FSDP on 4 cards: ~25-30 GB per card
+  # - Remaining for activations: ~100+ GB per card
+
+  # Can use large batch sizes!
+  per_device_memory_gb: 141
+
+# SFT optimized for H200
+sft:
+  batch_size: 8           # Higher than default (was 4)
+  gradient_accumulation: 4  # Lower (was 8)
+  # Effective: 8 * 4 * 4 = 128 (same total)
+
+  # Enable all optimizations
+  gradient_checkpointing: true
+  compile: true  # torch.compile for speedup
+
+# RL optimized for H200
+rl:
+  batch_size: 128         # Much higher (was 64)
+  num_envs: 64            # More parallel envs (was 32)
+
+  # Can run more complex rollouts
+  max_turns: 20           # Increased from 15
+
+  # Enable for speed
+  compile: true
+
+# Distributed training settings
+distributed:
+  # FSDP configuration
+  fsdp_config:
+    sharding_strategy: "FULL_SHARD"
+    cpu_offload: false    # H200 has enough VRAM
+    backward_prefetch: "BACKWARD_POST"
+    forward_prefetch: true
+
+  # Activation checkpointing
+  activation_checkpointing: true
+
+  # Mixed precision
+  mixed_precision:
+    param_dtype: "bfloat16"
+    reduce_dtype: "bfloat16"
+    buffer_dtype: "bfloat16"

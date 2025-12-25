@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepresearch-gigaagent"
+version = "0.1.0"
+description = "Deep Research Agent Training Pipeline with Code Reasoning"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "DeepResearch Team"}
+]
+
+dependencies = [
+    # Core
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "accelerate>=0.25.0",
+    "bitsandbytes>=0.41.0",
+
+    # Document processing
+    "python-docx>=0.8.11",
+    "mammoth>=1.6.0",
+    "pypdf2>=3.0.0",
+    "markdown>=3.5.0",
+
+    # Data & Analysis
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "matplotlib>=3.7.0",
+    "sympy>=1.12",
+
+    # API clients
+    "openai>=1.0.0",
+    "anthropic>=0.8.0",
+    "httpx>=0.25.0",
+
+    # RL & Training
+    "datasets>=2.14.0",
+    "wandb>=0.16.0",
+    "tqdm>=4.66.0",
+
+    # Async & Sandbox
+    "asyncio>=3.4.3",
+    "aiofiles>=23.2.0",
+    "RestrictedPython>=6.2",
+
+    # Utils
+    "pyyaml>=6.0",
+    "jsonlines>=4.0.0",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+dr-convert = "src.library.convert:main"
+dr-generate = "src.synthetic.generate:main"
+dr-train = "src.training.train:main"
+dr-agent = "src.env.run_agent:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
