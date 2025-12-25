@@ -1,0 +1,168 @@
+# Deep Research Agent Training Configuration
+# Default settings for 4×H200 GPUs
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  name: "GigaChat-Lightning-Instruct"
+  # Path to model weights (local or HuggingFace hub)
+  path: null
+  precision: "bf16"
+  flash_attention: true
+
+# =============================================================================
+# Data Paths
+# =============================================================================
+paths:
+  # Directory containing DOCX files for conversion
+  raw_papers: "./data/raw_docx"
+
+  # Structured library output
+  library: "./data/library"
+
+  # Generated datasets
+  datasets: "./data/datasets"
+
+  # Training workspace
+  workspace: "./data/workspace"
+
+  # Model outputs
+  output: "./outputs"
+
+# =============================================================================
+# Library Conversion
+# =============================================================================
+library:
+  # Skip already processed files (by hash)
+  skip_existing: true
+
+  # Pandoc path (if not in PATH)
+  pandoc_path: "pandoc"
+
+# =============================================================================
+# Dataset Generation
+# =============================================================================
+data_generation:
+  # Total number of RL prompts to generate
+  n_samples: 10000
+
+  # Task type distribution
+  distribution:
+    retrieval: 0.30
+    multihop: 0.25
+    computation: 0.15
+    visualization: 0.05
+    synthesis: 0.15
+    sft_demo: 0.10
+
+  # LLM for generation
+  llm:
+    backend: "openai"  # openai, anthropic, vllm
+    model: "gpt-4o"
+    # base_url: null  # For custom endpoints
+
+# =============================================================================
+# SFT Training
+# =============================================================================
+sft:
+  # Training hyperparameters
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-5
+  num_epochs: 3
+  warmup_ratio: 0.1
+  max_seq_length: 4096
+
+  # Data split
+  val_split: 0.1
+
+  # Optimization
+  gradient_checkpointing: true
+
+  # Logging
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+
+# =============================================================================
+# RL Training
+# =============================================================================
+rl:
+  # Algorithm
+  algorithm: "ppo"  # ppo, grpo
+
+  # PPO hyperparameters
+  ppo_epochs: 4
+  clip_range: 0.2
+  value_clip_range: 0.2
+  kl_coef: 0.1
+  entropy_coef: 0.01
+  gamma: 0.99
+  gae_lambda: 0.95
+
+  # Batch sizes
+  rollout_batch_size: 64
+  mini_batch_size: 8
+  gradient_accumulation_steps: 4
+
+  # Learning rates
+  actor_lr: 1.0e-6
+  critic_lr: 1.0e-5
+  warmup_steps: 100
+
+  # Environment
+  max_turns: 15
+  num_envs: 32
+
+  # Training
+  total_steps: 10000
+  checkpoint_interval: 500
+  eval_interval: 100
+  log_interval: 10
+
+  # Curriculum learning
+  curriculum:
+    enabled: true
+    levels: 6
+    level_up_threshold: 0.7
+
+# =============================================================================
+# Reward Configuration (MOA-style)
+# =============================================================================
+rewards:
+  weights:
+    R_fact: 0.4
+    R_process: 0.2
+    R_citation: 0.2
+    R_code: 0.2
+
+  # LLM-as-Judge for factual evaluation
+  judge:
+    enabled: true
+    model: "gpt-4o"
+    backend: "openai"
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+hardware:
+  num_gpus: 4
+  use_fsdp: true
+  fsdp_config:
+    sharding_strategy: "FULL_SHARD"
+    auto_wrap_policy: "transformer_layer"
+    # For GigaChat
+    transformer_layer_cls: "GigaChatDecoderLayer"
+
+# =============================================================================
+# Logging & Monitoring
+# =============================================================================
+logging:
+  # TensorBoard/Wandb
+  report_to: "tensorboard"
+  project_name: "deep-research-agent"
+  run_name: null  # Auto-generated if null
+
+  # Checkpointing
+  save_total_limit: 3

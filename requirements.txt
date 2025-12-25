@@ -1,0 +1,50 @@
+# Deep Research Agent - Dependencies
+# =================================
+
+# Core
+torch>=2.1.0
+transformers>=4.36.0
+datasets>=2.15.0
+accelerate>=0.25.0
+tokenizers>=0.15.0
+
+# Document Processing
+python-docx>=0.8.11
+# Note: pandoc is a system dependency, install via: apt install pandoc
+
+# API Clients (for dataset generation and LLM-as-Judge)
+openai>=1.6.0
+anthropic>=0.8.0
+
+# Scientific Computing (for Code Interpreter)
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+matplotlib>=3.7.0
+sympy>=1.12
+
+# Training Infrastructure
+# Install from source:
+# git clone https://github.com/PrimeIntellect-ai/prime-rl.git
+# pip install -e ./prime-rl
+# git clone https://github.com/PrimeIntellect-ai/verifiers.git
+# pip install -e ./verifiers
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.66.0
+rich>=13.0.0
+
+# Flash Attention (for H200 GPUs)
+# pip install flash-attn --no-build-isolation
+# or: pip install flash-attn-2
+
+# Optional: FSDP improvements
+# pip install fairscale
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.7.0
