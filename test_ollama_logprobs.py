@@ -11,7 +11,7 @@ Cloud Models: https://ollama.com/search?c=cloud
 
 import os
 import math
-from openai import OpenAI
+import json
 
 
 # =============================================================================
@@ -50,34 +50,61 @@ def test_ollama_cloud_logprobs():
         return None
 
     # Initialize OpenAI-compatible client
+    from openai import OpenAI
     client = OpenAI(
         base_url=base_url,
         api_key=api_key,
     )
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. Answer concisely."
+        },
+        {
+            "role": "user",
+            "content": "What is 2 + 2? Answer with just the number."
+        }
+    ]
 
     print(f"Testing Ollama Cloud API")
     print(f"Base URL: {base_url}")
     print(f"Model: {model_name}")
     print("-" * 50)
 
+    # Print equivalent curl command
+    print("\n=== Equivalent curl command ===")
+    curl_payload = {
+        "model": model_name,
+        "messages": messages,
+        "logprobs": True,
+        "top_logprobs": 5,
+        "max_tokens": 50,
+        "temperature": 0.7,
+    }
+    print(f"""curl {base_url}/chat/completions \\
+  -H "Authorization: Bearer $OLLAMA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{json.dumps(curl_payload)}'
+""")
+
+    print("=== Request payload ===")
+    print(json.dumps(curl_payload, indent=2))
+    print("-" * 50)
+
     try:
         response = client.chat.completions.create(
             model=model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant. Answer concisely."
-                },
-                {
-                    "role": "user",
-                    "content": "What is 2 + 2? Answer with just the number."
-                }
-            ],
+            messages=messages,
             logprobs=True,
             top_logprobs=5,  # Return top 5 token probabilities
             max_tokens=50,
             temperature=0.7,
         )
+
+        # Print raw response
+        print("\n=== Raw Response (model_dump) ===")
+        print(json.dumps(response.model_dump(), indent=2, default=str))
 
         print("\n=== Response ===")
         print(f"Content: {response.choices[0].message.content}")
@@ -96,7 +123,11 @@ def test_ollama_cloud_logprobs():
                         prob = math.exp(alt.logprob)
                         print(f"    '{alt.token}': logprob={alt.logprob:.4f} (prob={prob:.4f})")
         else:
-            print("No logprobs returned. Model may not support logprobs.")
+            print("No logprobs returned.")
+            print("Possible reasons:")
+            print("  - Model doesn't support logprobs")
+            print("  - Ollama Cloud doesn't expose logprobs for this model")
+            print("  - Check raw response above for details")
 
         print("\n=== Usage ===")
         if response.usage:
@@ -118,7 +149,6 @@ def test_ollama_cloud_logprobs_raw():
     Uses the OpenAI-compatible /v1/chat/completions endpoint.
     """
     import requests
-    import json
 
     base_url = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
     api_key = os.getenv("OLLAMA_API_KEY")
@@ -148,28 +178,51 @@ def test_ollama_cloud_logprobs_raw():
         "stream": False,
     }
 
-    print(f"Making request to: {url}")
-    print(f"Model: {model_name}")
-    print(f"Payload: {json.dumps(payload, indent=2)}")
+    print("=== curl equivalent ===")
+    print(f"""curl '{url}' \\
+  -H 'Authorization: Bearer $OLLAMA_API_KEY' \\
+  -H 'Content-Type: application/json' \\
+  -d '{json.dumps(payload)}'
+""")
+
+    print(f"=== Request ===")
+    print(f"URL: {url}")
+    print(f"Headers: {json.dumps({k: v if k != 'Authorization' else 'Bearer ***' for k, v in headers.items()}, indent=2)}")
+    print(f"Payload:\n{json.dumps(payload, indent=2)}")
     print("-" * 50)
 
     response = requests.post(url, headers=headers, json=payload, timeout=60)
+
+    print(f"\n=== HTTP Response ===")
+    print(f"Status: {response.status_code}")
+    print(f"Headers: {dict(response.headers)}")
+
+    try:
+        data = response.json()
+        print(f"\n=== Response Body (JSON) ===")
+        print(json.dumps(data, indent=2))
+
+        # Parse and display logprobs nicely
+        if "choices" in data and data["choices"]:
+            choice = data["choices"][0]
+            print(f"\n=== Content ===")
+            print(choice.get("message", {}).get("content", ""))
+
+            if "logprobs" in choice and choice["logprobs"]:
+                print("\n=== Parsed Logprobs ===")
+                content_logprobs = choice["logprobs"].get("content", [])
+                for i, token_info in enumerate(content_logprobs):
+                    token = token_info.get("token", "")
+                    logprob = token_info.get("logprob", 0)
+                    print(f"Token {i + 1}: '{token}' (logprob={logprob:.4f}, prob={math.exp(logprob):.4f})")
+            else:
+                print("\n=== Logprobs ===")
+                print("logprobs field:", choice.get("logprobs"))
+    except:
+        print(f"\n=== Response Body (raw) ===")
+        print(response.text)
+
     response.raise_for_status()
-
-    data = response.json()
-    print(f"\nResponse:\n{json.dumps(data, indent=2)}")
-
-    # Parse and display logprobs nicely
-    if "choices" in data and data["choices"]:
-        choice = data["choices"][0]
-        if "logprobs" in choice and choice["logprobs"]:
-            print("\n=== Parsed Logprobs ===")
-            content_logprobs = choice["logprobs"].get("content", [])
-            for i, token_info in enumerate(content_logprobs):
-                token = token_info.get("token", "")
-                logprob = token_info.get("logprob", 0)
-                print(f"Token {i + 1}: '{token}' (logprob={logprob:.4f}, prob={math.exp(logprob):.4f})")
-
     return data
 
 
@@ -214,7 +267,8 @@ def test_ollama_native_api():
         }
     )
 
-    print(f"\nResponse: {response}")
+    print(f"\n=== Response ===")
+    print(json.dumps(response, indent=2, default=str))
     return response
 
 
