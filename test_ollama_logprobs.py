@@ -2,24 +2,27 @@
 """
 Test script for Ollama Cloud API with logprobs support.
 
-Ollama Cloud supports OpenAI-compatible API at /v1/chat/completions endpoint.
-Logprobs are supported with the `logprobs` and `top_logprobs` parameters.
+IMPORTANT: Logprobs are supported via NATIVE Ollama API (/api/chat),
+NOT via OpenAI-compatible API (/v1/chat/completions).
 
-API Documentation: https://docs.ollama.com/cloud
-Cloud Models: https://ollama.com/search?c=cloud
+API Documentation:
+- Native API: https://docs.ollama.com/api/chat
+- OpenAI Compatibility: https://docs.ollama.com/api/openai-compatibility
+- Cloud Models: https://ollama.com/search?c=cloud
 """
 
 import os
 import math
 import json
+import requests
 
 
 # =============================================================================
 # Ollama Cloud Configuration
 # =============================================================================
 
-# Ollama Cloud base URL for OpenAI-compatible API
-OLLAMA_CLOUD_BASE_URL = "https://ollama.com/v1"
+# Ollama Cloud base URL
+OLLAMA_CLOUD_URL = "https://ollama.com"
 
 # Available DeepSeek cloud models:
 # - deepseek-v3.1 (671B parameters, hybrid thinking/non-thinking mode)
@@ -27,145 +30,124 @@ OLLAMA_CLOUD_BASE_URL = "https://ollama.com/v1"
 DEFAULT_MODEL = "deepseek-v3.2"
 
 
-def test_ollama_cloud_logprobs():
+def test_ollama_native_logprobs():
     """
-    Test Ollama Cloud API with DeepSeek V3.2 model and logprobs output.
+    Test Ollama API with logprobs using NATIVE /api/chat endpoint.
 
-    Requires OLLAMA_API_KEY environment variable.
-    Get your API key at: https://ollama.com/settings/keys
+    This is the correct way to get logprobs from Ollama.
+    The OpenAI-compatible endpoint (/v1/chat/completions) may not return logprobs.
     """
-
-    # Configuration
-    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_CLOUD_BASE_URL)
+    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_CLOUD_URL)
     api_key = os.getenv("OLLAMA_API_KEY")
     model_name = os.getenv("OLLAMA_MODEL", DEFAULT_MODEL)
 
-    if not api_key:
-        print("ERROR: OLLAMA_API_KEY environment variable is required!")
-        print("Get your API key at: https://ollama.com/settings/keys")
-        print()
-        print("Example:")
-        print('  export OLLAMA_API_KEY="your-api-key-here"')
-        print("  python test_ollama_logprobs.py")
-        return None
+    # Native Ollama API endpoint
+    url = f"{base_url}/api/chat"
 
-    # Initialize OpenAI-compatible client
-    from openai import OpenAI
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key,
-    )
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a helpful assistant. Answer concisely."
-        },
-        {
-            "role": "user",
-            "content": "What is 2 + 2? Answer with just the number."
-        }
-    ]
-
-    print(f"Testing Ollama Cloud API")
-    print(f"Base URL: {base_url}")
-    print(f"Model: {model_name}")
-    print("-" * 50)
-
-    # Print equivalent curl command
-    print("\n=== Equivalent curl command ===")
-    curl_payload = {
-        "model": model_name,
-        "messages": messages,
-        "logprobs": True,
-        "top_logprobs": 5,
-        "max_tokens": 50,
-        "temperature": 0.7,
+    headers = {
+        "Content-Type": "application/json",
     }
-    print(f"""curl {base_url}/chat/completions \\
-  -H "Authorization: Bearer $OLLAMA_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{json.dumps(curl_payload)}'
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    # Native Ollama API format with logprobs
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "user", "content": "What is 2 + 2? Answer with just the number."}
+        ],
+        "logprobs": True,           # Enable logprobs
+        "top_logprobs": 5,          # Return top 5 alternatives per token
+        "stream": False,            # Disable streaming for easier parsing
+        "options": {
+            "temperature": 0.7,
+            "num_predict": 50,
+        }
+    }
+
+    print("=" * 60)
+    print("Ollama Native API - Logprobs Test")
+    print("=" * 60)
+    print(f"\nEndpoint: {url}")
+    print(f"Model: {model_name}")
+
+    # Print curl command
+    print("\n=== curl command ===")
+    curl_headers = '-H "Content-Type: application/json"'
+    if api_key:
+        curl_headers += ' -H "Authorization: Bearer $OLLAMA_API_KEY"'
+    print(f"""curl '{url}' \\
+  {curl_headers} \\
+  -d '{json.dumps(payload)}'
 """)
 
     print("=== Request payload ===")
-    print(json.dumps(curl_payload, indent=2))
+    print(json.dumps(payload, indent=2))
     print("-" * 50)
 
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            logprobs=True,
-            top_logprobs=5,  # Return top 5 token probabilities
-            max_tokens=50,
-            temperature=0.7,
-        )
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
 
-        # Print raw response
-        print("\n=== Raw Response (model_dump) ===")
-        print(json.dumps(response.model_dump(), indent=2, default=str))
+        print(f"\n=== HTTP Response ===")
+        print(f"Status: {response.status_code}")
 
-        print("\n=== Response ===")
-        print(f"Content: {response.choices[0].message.content}")
-        print(f"Finish reason: {response.choices[0].finish_reason}")
+        data = response.json()
+        print(f"\n=== Response Body ===")
+        print(json.dumps(data, indent=2))
 
-        print("\n=== Logprobs ===")
-        if response.choices[0].logprobs and response.choices[0].logprobs.content:
-            for i, token_info in enumerate(response.choices[0].logprobs.content):
-                print(f"\nToken {i + 1}: '{token_info.token}'")
-                print(f"  Logprob: {token_info.logprob:.4f}")
-                print(f"  Probability: {math.exp(token_info.logprob):.4f}")
+        # Parse response
+        if "message" in data:
+            print(f"\n=== Content ===")
+            print(data["message"].get("content", ""))
 
-                if token_info.top_logprobs:
+        # Parse logprobs
+        if "logprobs" in data and data["logprobs"]:
+            print(f"\n=== Logprobs ===")
+            for i, token_info in enumerate(data["logprobs"]):
+                token = token_info.get("token", "")
+                logprob = token_info.get("logprob", 0)
+                prob = math.exp(logprob) if logprob else 0
+                print(f"\nToken {i + 1}: '{token}'")
+                print(f"  Logprob: {logprob:.4f}")
+                print(f"  Probability: {prob:.4f}")
+
+                if "top_logprobs" in token_info and token_info["top_logprobs"]:
                     print(f"  Top alternatives:")
-                    for alt in token_info.top_logprobs:
-                        prob = math.exp(alt.logprob)
-                        print(f"    '{alt.token}': logprob={alt.logprob:.4f} (prob={prob:.4f})")
+                    for alt in token_info["top_logprobs"]:
+                        alt_token = alt.get("token", "")
+                        alt_logprob = alt.get("logprob", 0)
+                        alt_prob = math.exp(alt_logprob) if alt_logprob else 0
+                        print(f"    '{alt_token}': logprob={alt_logprob:.4f} (prob={alt_prob:.4f})")
         else:
-            print("No logprobs returned.")
-            print("Possible reasons:")
-            print("  - Model doesn't support logprobs")
-            print("  - Ollama Cloud doesn't expose logprobs for this model")
-            print("  - Check raw response above for details")
+            print(f"\n=== Logprobs ===")
+            print("No logprobs in response.")
+            print("'logprobs' field:", data.get("logprobs"))
 
-        print("\n=== Usage ===")
-        if response.usage:
-            print(f"Prompt tokens: {response.usage.prompt_tokens}")
-            print(f"Completion tokens: {response.usage.completion_tokens}")
-            print(f"Total tokens: {response.usage.total_tokens}")
+        response.raise_for_status()
+        return data
 
-        return response
-
-    except Exception as e:
-        print(f"Error: {type(e).__name__}: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"\nError: {type(e).__name__}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response text: {e.response.text}")
         raise
 
 
-def test_ollama_cloud_logprobs_raw():
+def test_openai_compatible():
     """
-    Alternative: Direct HTTP request to Ollama Cloud API.
-
-    Uses the OpenAI-compatible /v1/chat/completions endpoint.
+    Test OpenAI-compatible endpoint (may NOT return logprobs on Ollama Cloud).
     """
-    import requests
-
-    base_url = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
+    base_url = os.getenv("OLLAMA_BASE_URL", OLLAMA_CLOUD_URL)
     api_key = os.getenv("OLLAMA_API_KEY")
     model_name = os.getenv("OLLAMA_MODEL", DEFAULT_MODEL)
 
-    if not api_key:
-        print("ERROR: OLLAMA_API_KEY environment variable is required!")
-        print("Get your API key at: https://ollama.com/settings/keys")
-        return None
-
-    # OpenAI-compatible endpoint
     url = f"{base_url}/v1/chat/completions"
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
     }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     payload = {
         "model": model_name,
@@ -175,128 +157,76 @@ def test_ollama_cloud_logprobs_raw():
         "logprobs": True,
         "top_logprobs": 5,
         "max_tokens": 50,
+        "temperature": 0.7,
         "stream": False,
     }
 
-    print("=== curl equivalent ===")
-    print(f"""curl '{url}' \\
-  -H 'Authorization: Bearer $OLLAMA_API_KEY' \\
-  -H 'Content-Type: application/json' \\
-  -d '{json.dumps(payload)}'
-""")
+    print("=" * 60)
+    print("OpenAI-Compatible API - Logprobs Test")
+    print("=" * 60)
+    print(f"\nEndpoint: {url}")
+    print(f"Model: {model_name}")
+    print("\nNOTE: OpenAI-compatible endpoint may NOT return logprobs on Ollama Cloud.")
+    print("Use --native for native API which supports logprobs.")
 
-    print(f"=== Request ===")
-    print(f"URL: {url}")
-    print(f"Headers: {json.dumps({k: v if k != 'Authorization' else 'Bearer ***' for k, v in headers.items()}, indent=2)}")
-    print(f"Payload:\n{json.dumps(payload, indent=2)}")
+    print("\n=== Request payload ===")
+    print(json.dumps(payload, indent=2))
     print("-" * 50)
 
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
-
-    print(f"\n=== HTTP Response ===")
-    print(f"Status: {response.status_code}")
-    print(f"Headers: {dict(response.headers)}")
-
     try:
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
         data = response.json()
-        print(f"\n=== Response Body (JSON) ===")
+
+        print(f"\n=== Response ===")
         print(json.dumps(data, indent=2))
 
-        # Parse and display logprobs nicely
         if "choices" in data and data["choices"]:
             choice = data["choices"][0]
             print(f"\n=== Content ===")
             print(choice.get("message", {}).get("content", ""))
 
-            if "logprobs" in choice and choice["logprobs"]:
-                print("\n=== Parsed Logprobs ===")
-                content_logprobs = choice["logprobs"].get("content", [])
-                for i, token_info in enumerate(content_logprobs):
-                    token = token_info.get("token", "")
-                    logprob = token_info.get("logprob", 0)
-                    print(f"Token {i + 1}: '{token}' (logprob={logprob:.4f}, prob={math.exp(logprob):.4f})")
+            logprobs = choice.get("logprobs")
+            print(f"\n=== Logprobs ===")
+            if logprobs:
+                print(json.dumps(logprobs, indent=2))
             else:
-                print("\n=== Logprobs ===")
-                print("logprobs field:", choice.get("logprobs"))
-    except:
-        print(f"\n=== Response Body (raw) ===")
-        print(response.text)
+                print(f"logprobs: {logprobs}")
+                print("\n⚠️  Logprobs not returned. Try using --native flag instead.")
 
-    response.raise_for_status()
-    return data
+        response.raise_for_status()
+        return data
 
-
-def test_ollama_native_api():
-    """
-    Test using Ollama's native Python client (ollama package).
-
-    Note: Native Ollama API may have different logprobs support.
-    """
-    try:
-        from ollama import Client
-    except ImportError:
-        print("ERROR: ollama package not installed.")
-        print("Install with: pip install ollama")
-        return None
-
-    api_key = os.getenv("OLLAMA_API_KEY")
-    model_name = os.getenv("OLLAMA_MODEL", DEFAULT_MODEL)
-
-    if not api_key:
-        print("ERROR: OLLAMA_API_KEY environment variable is required!")
-        return None
-
-    client = Client(
-        host="https://ollama.com",
-        headers={"Authorization": f"Bearer {api_key}"}
-    )
-
-    print(f"Testing Ollama Native API")
-    print(f"Model: {model_name}")
-    print("-" * 50)
-
-    # Note: Native API uses different parameters
-    response = client.chat(
-        model=model_name,
-        messages=[
-            {"role": "user", "content": "What is 2 + 2? Answer with just the number."}
-        ],
-        options={
-            "num_predict": 50,
-            "temperature": 0.7,
-        }
-    )
-
-    print(f"\n=== Response ===")
-    print(json.dumps(response, indent=2, default=str))
-    return response
+    except requests.exceptions.RequestException as e:
+        print(f"\nError: {type(e).__name__}: {e}")
+        raise
 
 
 if __name__ == "__main__":
     import sys
 
     print("=" * 60)
-    print("Ollama Cloud Logprobs Test")
+    print("Ollama Logprobs Test")
     print("=" * 60)
     print()
     print("Configuration:")
-    print(f"  Default Base URL: {OLLAMA_CLOUD_BASE_URL}")
+    print(f"  Default URL: {OLLAMA_CLOUD_URL}")
     print(f"  Default Model: {DEFAULT_MODEL}")
     print()
     print("Environment variables:")
-    print("  OLLAMA_API_KEY  - API key (required, get at https://ollama.com/settings/keys)")
+    print("  OLLAMA_API_KEY  - API key (get at https://ollama.com/settings/keys)")
     print("  OLLAMA_BASE_URL - API endpoint (optional)")
     print("  OLLAMA_MODEL    - Model name (optional)")
     print()
     print("Usage:")
-    print("  python test_ollama_logprobs.py          # OpenAI-compatible client")
-    print("  python test_ollama_logprobs.py --raw    # Raw HTTP request")
-    print("  python test_ollama_logprobs.py --native # Ollama native client")
+    print("  python test_ollama_logprobs.py           # Native API (recommended)")
+    print("  python test_ollama_logprobs.py --native  # Native API /api/chat")
+    print("  python test_ollama_logprobs.py --openai  # OpenAI-compatible /v1/...")
+    print()
+    print("For logprobs, use NATIVE API (default or --native flag).")
+    print("OpenAI-compatible API may not return logprobs on Ollama Cloud.")
     print()
 
-    if "--raw" in sys.argv:
-        test_ollama_cloud_logprobs_raw()
-    elif "--native" in sys.argv:
-        test_ollama_native_api()
+    if "--openai" in sys.argv:
+        test_openai_compatible()
     else:
-        test_ollama_cloud_logprobs()
+        test_ollama_native_logprobs()
